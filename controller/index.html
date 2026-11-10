@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlexiWindow IoT Controller</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <header class="app-header">
+      <h1>FlexiWindow IoT</h1>
+      <span class="connection-status online" id="connectionBadge">● Connected</span>
+    </header>
+
+    <!-- WINDOW STATUS PANEL -->
+    <section class="card status-card">
+      <div class="card-title">Window Status</div>
+      <div class="status-display">
+        <div class="status-text" id="windowState">CLOSED</div>
+        <div class="status-sub" id="windowPercent">0% Open</div>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBar" style="width: 0%;"></div>
+      </div>
+    </section>
+
+    <!-- AUTOMATION MODE TOGGLES -->
+    <section class="card">
+      <div class="card-title">Automation Modes</div>
+      
+      <div class="toggle-row">
+        <span>Day/Night Auto Mode</span>
+        <label class="switch">
+          <input type="checkbox" id="autoDayNight" checked onchange="handleModeChange()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span>Rain Auto-Close Safety</span>
+        <label class="switch">
+          <input type="checkbox" id="autoRain" checked onchange="handleModeChange()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span>Manual Override Mode</span>
+        <label class="switch">
+          <input type="checkbox" id="manualOverride" onchange="handleModeChange()">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- MANUAL CONTROLS -->
+    <div class="card">
+      <div class="card-title">Manual Control</div>
+        <div class="button-group">
+        <button id="manualToggleBtn" class="btn btn-open" onclick="toggleWindow()" disabled>OPEN WINDOW</button>
+      </div>
+    </div>
+
+    <!-- WEATHER FORECAST & SENSOR PANEL -->
+    <section class="card">
+      <div class="card-title">Live Weather & Sensors</div>
+      <div class="location-badge" id="valLocation">📍 Not Set</div><br>
+      <div class="sensor-grid">
+        <div class="sensor-item">
+          <div class="sensor-label">Condition</div>
+          <div class="sensor-value" id="valCondition">Partly Cloudy</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">Temperature</div>
+          <div class="sensor-value" id="valTemp">28°C</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">Rain Chance</div>
+          <div class="sensor-value" id="valRain">15%</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">Light Level</div>
+          <div class="sensor-value" id="valLux">850 Lux</div>
+        </div>
+      </div><br><br>
+
+      
+
+    </section>
+  </div>
+
+  <script src="weatherApi.js"></script>
+
+  <script src="script.js"></script>
+</body>
+</html>

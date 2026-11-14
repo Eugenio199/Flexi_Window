@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "FlexiWindow",
+			"path": "../../Documents/PlatformIO/Projects/FlexiWindow"
+		}
+	],
+	"settings": {
+		"liveServer.settings.port": 5501,
+		"liveServer.settings.multiRootWorkspaceName": "controller"
+	}
+}

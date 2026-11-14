@@ -162,6 +162,22 @@ window.addEventListener('DOMContentLoaded', () => {
 
   updateLocation('Tarlac City');
   updateModeControls();
+  if (window.location.protocol === 'https:') {
+    byId('connectionHelp').textContent =
+      'Browsers block HTTPS pages from controlling the ESP32 over HTTP. Join its Wi-Fi, then open the controller directly from the ESP32.';
+    byId('devicePageLink').hidden = false;
+    byId('deviceAddress').disabled = true;
+    byId('connectBtn').disabled = true;
+    byId('autoDayNight').disabled = true;
+    byId('autoRain').disabled = true;
+    byId('manualOverride').disabled = true;
+    byId('manualToggleBtn').disabled = true;
+    setConnectionStatus(false, 'Open local controller');
+    fetchLiveWeather();
+    setInterval(fetchLiveWeather, 300000);
+    return;
+  }
+
   setConnectionStatus(false, 'Connecting');
   refreshDeviceState();
   fetchLiveWeather();

@@ -76,6 +76,18 @@ body {
   font-size: 0.8rem;
 }
 
+.device-page-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #1a73e8;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.device-page-link[hidden] {
+  display: none;
+}
+
 .card-header-row {
   display: flex;
   justify-content: space-between;

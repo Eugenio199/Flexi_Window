@@ -20,7 +20,8 @@
         <input id="deviceAddress" type="text" inputmode="url" placeholder="192.168.4.1" aria-label="ESP32 address">
         <button id="connectBtn" class="btn btn-open" type="button">RETRY</button>
       </div>
-      <div class="connection-help">Join “FlexiWindow-Setup” Wi-Fi first (password: FlexiWin-49281). The page connects to 192.168.4.1 automatically and retries if the signal is not ready yet.</div>
+      <div class="connection-help" id="connectionHelp">Join “FlexiWindow-Setup” Wi-Fi first (password: FlexiWin-49281). The page connects to 192.168.4.1 automatically and retries if the signal is not ready yet.</div>
+      <a id="devicePageLink" class="device-page-link" href="http://192.168.4.1/" hidden>Open controller on ESP32</a>
     </section>
 
     <!-- WINDOW STATUS PANEL -->

@@ -37,11 +37,7 @@ constexpr int NIGHT_CLOSE_THRESHOLD = 1800;
 // ---------- MOTOR SETTINGS ----------
 constexpr uint32_t MOTOR_RUN_MS = 90;
 
-// Enter the 2.4 GHz Wi-Fi credentials used by your phone/computer.
-const char* WIFI_SSID = "404_error!";
-const char* WIFI_PASSWORD = "Cuaresma05.";
-
-// This setup network stays available even if router Wi-Fi is unavailable.
+// The ESP32 hosts both the controller page and API on this local network.
 const char* SETUP_AP_SSID = "FlexiWindow-Setup";
 const char* SETUP_AP_PASSWORD = "FlexiWin-49281";
 
@@ -73,8 +69,6 @@ bool manualModeEnabled = false;
 
 WebServer server(80);
 bool webServerStarted = false;
-bool routerConnectionReported = false;
-uint32_t lastWiFiRetryAt = 0;
 int currentLightReading = 0;
 
 // Rain protection state
@@ -98,6 +92,134 @@ uint32_t motorStartedAt = 0;
 // ==========================================
 // WI-FI API
 // ==========================================
+
+const char INDEX_HTML[] PROGMEM = R"FLEXI(
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f3f6fb">
+  <title>FlexiWindow Controller</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;padding:20px;background:#f3f6fb;color:#172033;font:16px system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:520px;margin:0 auto;display:grid;gap:16px}
+    header,.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 18px #17203312}
+    header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    h1{font-size:1.35rem;margin:0}
+    h2{font-size:.9rem;text-transform:uppercase;letter-spacing:.06em;color:#536078;margin:0 0 16px}
+    .badge{font-size:.78rem;color:#a52828;background:#fff0ef;padding:6px 10px;border-radius:99px;white-space:nowrap}
+    .badge.online{color:#147443;background:#e8f7ef}
+    .status{text-align:center;font-size:2rem;font-weight:800;margin:2px 0}
+    .sub{text-align:center;color:#657087;margin-bottom:16px}
+    .track{height:10px;border-radius:10px;background:#e8edf5;overflow:hidden}
+    .fill{height:100%;width:0;background:#346ee8;transition:width .25s}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #edf0f5}
+    .row:last-child{border:0;padding-bottom:0}
+    input[type=checkbox]{width:22px;height:22px;accent-color:#346ee8}
+    button{width:100%;padding:14px;border:0;border-radius:10px;background:#346ee8;color:#fff;font-size:1rem;font-weight:700}
+    button:disabled{background:#c5ccda;color:#626d80}
+    .sensors{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .sensor{background:#f4f6fa;padding:12px;border-radius:10px}
+    .sensor small{display:block;color:#657087;margin-bottom:4px}
+    #error{color:#b3261e;font-size:.9rem;min-height:1.2em;margin-top:12px}
+    .help{color:#657087;font-size:.85rem;line-height:1.45}
+  </style>
+</head>
+<body>
+<main>
+  <header><h1>FlexiWindow</h1><span class="badge" id="connection">Connecting...</span></header>
+  <section class="card">
+    <h2>Window status</h2>
+    <div class="status" id="state">--</div>
+    <div class="sub" id="position">Waiting for ESP32</div>
+    <div class="track"><div class="fill" id="progress"></div></div>
+  </section>
+  <section class="card">
+    <h2>Automation modes</h2>
+    <label class="row">Day/night automatic <input id="dayNight" type="checkbox"></label>
+    <label class="row">Rain auto-close safety <input id="rain" type="checkbox"></label>
+    <label class="row">Manual override <input id="manual" type="checkbox"></label>
+  </section>
+  <section class="card">
+    <h2>Manual control</h2>
+    <button id="control" disabled>OPEN WINDOW</button>
+    <div id="error" role="status"></div>
+  </section>
+  <section class="card">
+    <h2>ESP32 sensors</h2>
+    <div class="sensors">
+      <div class="sensor"><small>Light level</small><strong id="light">--</strong></div>
+      <div class="sensor"><small>Rain</small><strong id="rainStatus">--</strong></div>
+    </div>
+  </section>
+  <p class="help">Connected to the ESP32 setup Wi-Fi. Internet weather services are unavailable on this local network.</p>
+</main>
+<script>
+const byId=id=>document.getElementById(id);
+let state=null,busy=false;
+async function api(path){
+  const response=await fetch(path,{cache:"no-store"});
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"ESP32 request failed");
+  return data;
+}
+function render(data){
+  state=data;
+  const position=data.state==="OPEN"?100:0;
+  byId("state").textContent=data.moving?(data.targetOpen?"OPENING...":"CLOSING..."):data.state;
+  byId("position").textContent=position+"% open (estimated)";
+  byId("progress").style.width=position+"%";
+  byId("dayNight").checked=data.autoDayNight;
+  byId("rain").checked=data.autoRain;
+  byId("manual").checked=data.manualOverride;
+  byId("dayNight").disabled=data.manualOverride;
+  byId("rain").disabled=data.manualOverride;
+  byId("control").disabled=!data.manualOverride||data.moving||data.rainProtection;
+  byId("control").textContent=data.targetOpen||data.state==="OPEN"?"CLOSE WINDOW":"OPEN WINDOW";
+  byId("light").textContent=data.light+" ADC";
+  byId("rainStatus").textContent=data.rainWet?"WET":"DRY";
+  byId("connection").textContent="Connected";
+  byId("connection").classList.add("online");
+  byId("error").textContent="";
+}
+async function refresh(){
+  if(busy)return;
+  busy=true;
+  try{render(await api("/api/state"));}
+  catch(error){
+    byId("connection").textContent="Reconnecting...";
+    byId("connection").classList.remove("online");
+    byId("error").textContent=error.message;
+  }finally{busy=false;}
+}
+async function updateModes(){
+  const query=new URLSearchParams({
+    dayNight:byId("dayNight").checked?"1":"0",
+    rain:byId("rain").checked?"1":"0",
+    manual:byId("manual").checked?"1":"0"
+  });
+  try{render(await api("/api/mode?"+query));}
+  catch(error){byId("error").textContent=error.message;refresh();}
+}
+document.querySelectorAll("#dayNight,#rain,#manual").forEach(control=>control.addEventListener("change",updateModes));
+byId("control").addEventListener("click",async()=>{
+  if(!state)return;
+  const action=state.targetOpen||state.state==="OPEN"?"close":"open";
+  try{render(await api("/api/control?action="+action));}
+  catch(error){byId("error").textContent=error.message;refresh();}
+});
+refresh();
+setInterval(refresh,1500);
+</script>
+</body>
+</html>
+)FLEXI";
+
+void handleIndexRequest() {
+  server.send_P(200, "text/html; charset=utf-8", INDEX_HTML);
+}
 
 String buildStateJson() {
   String json = "{";
@@ -183,6 +305,7 @@ void handleControlRequest() {
 }
 
 void startWebServer() {
+  server.on("/", HTTP_GET, handleIndexRequest);
   server.on("/api/state", HTTP_GET, handleStateRequest);
   server.on("/api/mode", HTTP_GET, handleModeRequest);
   server.on("/api/control", HTTP_GET, handleControlRequest);
@@ -191,7 +314,7 @@ void startWebServer() {
 
   Serial.print("Controller API ready at http://");
   Serial.println(WiFi.softAPIP());
-  Serial.println("Join the setup Wi-Fi and enter the address above.");
+  Serial.println("Join the setup Wi-Fi and open the address above.");
 }
 
 // ==========================================
@@ -346,7 +469,7 @@ void setup() {
   Serial.print("Rain active level: ");
   Serial.println(RAIN_ACTIVE_LOW ? "LOW" : "HIGH");
 
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.mode(WIFI_AP);
   if (WiFi.softAP(SETUP_AP_SSID, SETUP_AP_PASSWORD)) {
     Serial.print("Setup Wi-Fi: ");
     Serial.println(SETUP_AP_SSID);
@@ -357,9 +480,6 @@ void setup() {
   }
 
   startWebServer();
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  lastWiFiRetryAt = millis();
-  Serial.println("Attempting to connect to the configured router Wi-Fi.");
 }
 
 // ==========================================
@@ -509,20 +629,6 @@ void loop() {
   }
 
   // ---------- WI-FI API ----------
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!routerConnectionReported) {
-      Serial.print("Router Wi-Fi connected. ESP32 address: http://");
-      Serial.println(WiFi.localIP());
-      routerConnectionReported = true;
-    }
-  } else {
-    routerConnectionReported = false;
-    if ((uint32_t)(now - lastWiFiRetryAt) >= 10000) {
-      lastWiFiRetryAt = now;
-      WiFi.reconnect();
-    }
-  }
-
   if (webServerStarted) {
     server.handleClient();
   }

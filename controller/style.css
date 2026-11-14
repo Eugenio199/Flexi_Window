@@ -46,6 +46,36 @@ body {
   color: #137333;
 }
 
+.connection-status.offline {
+  background-color: #fce8e6;
+  color: #b3261e;
+}
+
+.connection-form {
+  display: flex;
+  gap: 8px;
+}
+
+.connection-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.connection-form .btn {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+}
+
+.connection-help {
+  margin-top: 8px;
+  color: #5f6368;
+  font-size: 0.8rem;
+}
+
 .card-header-row {
   display: flex;
   justify-content: space-between;

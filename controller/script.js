@@ -1,122 +1,170 @@
-let currentState = "CLOSED";
-let currentPercent = 0;
+const DEFAULT_DEVICE_ADDRESS = '192.168.4.1';
+let deviceUrl = `http://${DEFAULT_DEVICE_ADDRESS}`;
+let currentState = 'CLOSED';
+let currentTargetOpen = false;
 let isMoving = false;
+let isRefreshing = false;
 
-function handleModeChange() {
-  const dayNightEl = document.getElementById('autoDayNight');
-  const rainEl = document.getElementById('autoRain');
-  const manualEl = document.getElementById('manualOverride');
-  
-  const manualToggleBtn = document.getElementById('manualToggleBtn');
-  
-  if (manualEl.checked) {
-    dayNightEl.checked = false;
-    rainEl.checked = false;
-    dayNightEl.disabled = true;
-    rainEl.disabled = true;
-    
-    manualToggleBtn.disabled = false;
-  } else {
-    dayNightEl.checked = true;
-    rainEl.checked = true;
-    dayNightEl.disabled = false;
-    rainEl.disabled = false;
-    
-    manualToggleBtn.disabled = true;
+const byId = (id) => document.getElementById(id);
+
+function setConnectionStatus(connected, message) {
+  const badge = byId('connectionBadge');
+  badge.classList.toggle('online', connected);
+  badge.classList.toggle('offline', !connected);
+  badge.textContent = connected ? '● Connected' : `● ${message || 'Disconnected'}`;
+}
+
+function updateModeControls() {
+  const manualMode = byId('manualOverride').checked;
+  byId('autoDayNight').disabled = manualMode;
+  byId('autoRain').disabled = manualMode;
+}
+
+function getDeviceUrl() {
+  const value = byId('deviceAddress').value.trim();
+  if (!value) {
+    throw new Error('Enter the ESP32 IP address first.');
+  }
+
+  const url = new URL(value.includes('://') ? value : `http://${value}`);
+  if (url.protocol !== 'http:' || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Enter the ESP32 IP address only (for example: 192.168.1.50).');
+  }
+
+  deviceUrl = url.origin;
+  return deviceUrl;
+}
+
+async function requestDevice(path) {
+  if (!deviceUrl) {
+    getDeviceUrl();
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(`${deviceUrl}${path}`, {
+      method: 'GET',
+      signal: controller.signal
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `ESP32 returned HTTP ${response.status}`);
+    }
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-// Function na nagpapasya kung bubuksan o isasara base sa current percentage/state
-function toggleWindow() {
-  if (isMoving) return;
-  
-  // Kung 0% o nakasara, gawing OPEN; kung may laman o bukas, gawing CLOSE
-  if (currentPercent === 0) {
-    controlWindow("OPEN");
-  } else {
-    controlWindow("CLOSE");
+function showDeviceState(data) {
+  currentState = data.state;
+  currentTargetOpen = data.targetOpen;
+  isMoving = data.moving;
+
+  const position = data.state === 'OPEN' ? 100 : 0;
+  byId('windowState').textContent = isMoving
+    ? (currentTargetOpen ? 'OPENING...' : 'CLOSING...')
+    : currentState;
+  byId('windowPercent').textContent = `${position}% Open (estimated)`;
+  byId('progressBar').style.width = `${position}%`;
+
+  byId('autoDayNight').checked = data.autoDayNight;
+  byId('autoRain').checked = data.autoRain;
+  byId('manualOverride').checked = data.manualOverride;
+  updateModeControls();
+
+  const manualButton = byId('manualToggleBtn');
+  const protectedByRain = data.rainProtection;
+  manualButton.disabled = !data.manualOverride || isMoving || protectedByRain;
+  manualButton.textContent = currentTargetOpen || currentState === 'OPEN'
+    ? 'CLOSE WINDOW'
+    : 'OPEN WINDOW';
+  manualButton.classList.toggle('btn-close-mode', currentTargetOpen || currentState === 'OPEN');
+
+  byId('valLux').textContent = `${data.light} ADC`;
+  byId('valRainSensor').textContent = data.rainWet ? 'WET' : 'DRY';
+}
+
+async function refreshDeviceState() {
+  if (!deviceUrl || isRefreshing) return;
+
+  isRefreshing = true;
+  try {
+    const data = await requestDevice('/api/state');
+    showDeviceState(data);
+    setConnectionStatus(true);
+  } catch (error) {
+    setConnectionStatus(false, 'Connection failed');
+    console.error('ESP32 connection error:', error);
+  } finally {
+    isRefreshing = false;
   }
 }
 
-function controlWindow(action) {
-  if (isMoving) return;
+async function connectToDevice() {
+  try {
+    getDeviceUrl();
+    await refreshDeviceState();
+  } catch (error) {
+    setConnectionStatus(false, error.message);
+  }
+}
 
-  const windowStateEl = document.getElementById("windowState");
-  const windowPercentEl = document.getElementById("windowPercent");
-  const progressBarEl = document.getElementById("progressBar");
-  const manualToggleBtn = document.getElementById('manualToggleBtn');
+async function updateModes() {
+  updateModeControls();
+  const params = new URLSearchParams({
+    dayNight: byId('autoDayNight').checked ? '1' : '0',
+    rain: byId('autoRain').checked ? '1' : '0',
+    manual: byId('manualOverride').checked ? '1' : '0'
+  });
 
-  if (action === "OPEN") {
-    if (currentPercent === 100) return;
-    isMoving = true;
-    windowStateEl.innerText = "OPENING...";
-    if (manualToggleBtn) manualToggleBtn.disabled = true; // Disable habang gumagalaw
+  try {
+    await requestDevice(`/api/mode?${params.toString()}`);
+    await refreshDeviceState();
+  } catch (error) {
+    setConnectionStatus(false, 'Mode update failed');
+    console.error('ESP32 mode update error:', error);
+    await refreshDeviceState();
+  }
+}
 
-    let interval = setInterval(() => {
-      if (currentPercent < 100) {
-        currentPercent += 20;
-        windowPercentEl.innerText = currentPercent + "% Open";
-        progressBarEl.style.width = currentPercent + "%";
-      } else {
-        clearInterval(interval);
-        currentState = "OPEN";
-        windowStateEl.innerText = "OPEN";
-        isMoving = false;
-        
-        // Pagkatapos bumukas, palitan ang button text maging "CLOSE WINDOW"
-        if (manualToggleBtn) {
-          manualToggleBtn.disabled = false;
-          manualToggleBtn.innerText = "CLOSE WINDOW";
-          manualToggleBtn.classList.add("btn-close-mode");
-        }
-      }
-    }, 300);
+async function toggleWindow() {
+  if (isMoving || !byId('manualOverride').checked) return;
 
-  } else if (action === "CLOSE") {
-    if (currentPercent === 0) return;
-    isMoving = true;
-    windowStateEl.innerText = "CLOSING...";
-    if (manualToggleBtn) manualToggleBtn.disabled = true; // Disable habang gumagalaw
-
-    let interval = setInterval(() => {
-      if (currentPercent > 0) {
-        currentPercent -= 20;
-        windowPercentEl.innerText = currentPercent + "% Open";
-        progressBarEl.style.width = currentPercent + "%";
-      } else {
-        clearInterval(interval);
-        currentState = "CLOSED";
-        windowStateEl.innerText = "CLOSED";
-        isMoving = false;
-        
-        // Pagkatapos magsara, palitan ang button text maging "OPEN WINDOW"
-        if (manualToggleBtn) {
-          manualToggleBtn.disabled = false;
-          manualToggleBtn.innerText = "OPEN WINDOW";
-          manualToggleBtn.classList.remove("btn-close-mode");
-        }
-      }
-    }, 300);
+  const action = currentTargetOpen || currentState === 'OPEN' ? 'close' : 'open';
+  try {
+    await requestDevice(`/api/control?action=${action}`);
+    await refreshDeviceState();
+  } catch (error) {
+    setConnectionStatus(false, 'Command failed');
+    console.error('ESP32 window command error:', error);
   }
 }
 
 function updateLocation(userCity) {
-  const locationBadge = document.getElementById('valLocation');
+  const locationBadge = byId('valLocation');
   if (locationBadge) {
     locationBadge.textContent = `📍 ${userCity}`;
   }
 }
 
-// Example usage:
-updateLocation('Tarlac City');
+window.addEventListener('DOMContentLoaded', () => {
+  byId('deviceAddress').value = DEFAULT_DEVICE_ADDRESS;
+  byId('connectBtn').addEventListener('click', connectToDevice);
+  byId('manualToggleBtn').addEventListener('click', toggleWindow);
+  byId('autoDayNight').addEventListener('change', updateModes);
+  byId('autoRain').addEventListener('change', updateModes);
+  byId('manualOverride').addEventListener('change', updateModes);
+  byId('deviceAddress').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') connectToDevice();
+  });
 
-window.onload = function() {
-  document.getElementById('autoDayNight').addEventListener('change', handleModeChange);
-  document.getElementById('autoRain').addEventListener('change', handleModeChange);
-  document.getElementById('manualOverride').addEventListener('change', handleModeChange);
-  handleModeChange();
-  
-  // Tatawagin nito ang function mula sa weatherApi.js
+  updateLocation('Tarlac City');
+  updateModeControls();
+  setConnectionStatus(false, 'Connecting');
+  refreshDeviceState();
   fetchLiveWeather();
-  setInterval(fetchLiveWeather, 300000); 
-};
+  setInterval(fetchLiveWeather, 300000);
+  setInterval(refreshDeviceState, 2000);
+});

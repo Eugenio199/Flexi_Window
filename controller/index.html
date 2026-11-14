@@ -11,8 +11,17 @@
   <div class="app-container">
     <header class="app-header">
       <h1>FlexiWindow IoT</h1>
-      <span class="connection-status online" id="connectionBadge">● Connected</span>
+      <span class="connection-status offline" id="connectionBadge">● Disconnected</span>
     </header>
+
+    <section class="card">
+      <div class="card-title">ESP32 Wi-Fi Connection</div>
+      <div class="connection-form">
+        <input id="deviceAddress" type="text" inputmode="url" placeholder="192.168.4.1" aria-label="ESP32 address">
+        <button id="connectBtn" class="btn btn-open" type="button">RETRY</button>
+      </div>
+      <div class="connection-help">Join “FlexiWindow-Setup” Wi-Fi first (password: FlexiWin-49281). The page connects to 192.168.4.1 automatically and retries if the signal is not ready yet.</div>
+    </section>
 
     <!-- WINDOW STATUS PANEL -->
     <section class="card status-card">
@@ -33,7 +42,7 @@
       <div class="toggle-row">
         <span>Day/Night Auto Mode</span>
         <label class="switch">
-          <input type="checkbox" id="autoDayNight" checked onchange="handleModeChange()">
+          <input type="checkbox" id="autoDayNight" checked>
           <span class="slider"></span>
         </label>
       </div>
@@ -41,7 +50,7 @@
       <div class="toggle-row">
         <span>Rain Auto-Close Safety</span>
         <label class="switch">
-          <input type="checkbox" id="autoRain" checked onchange="handleModeChange()">
+          <input type="checkbox" id="autoRain" checked>
           <span class="slider"></span>
         </label>
       </div>
@@ -49,7 +58,7 @@
       <div class="toggle-row">
         <span>Manual Override Mode</span>
         <label class="switch">
-          <input type="checkbox" id="manualOverride" onchange="handleModeChange()">
+          <input type="checkbox" id="manualOverride">
           <span class="slider"></span>
         </label>
       </div>
@@ -59,7 +68,7 @@
     <div class="card">
       <div class="card-title">Manual Control</div>
         <div class="button-group">
-        <button id="manualToggleBtn" class="btn btn-open" onclick="toggleWindow()" disabled>OPEN WINDOW</button>
+        <button id="manualToggleBtn" class="btn btn-open" type="button" disabled>OPEN WINDOW</button>
       </div>
     </div>
 
@@ -81,8 +90,12 @@
           <div class="sensor-value" id="valRain">15%</div>
         </div>
         <div class="sensor-item">
-          <div class="sensor-label">Light Level</div>
-          <div class="sensor-value" id="valLux">850 Lux</div>
+          <div class="sensor-label">ESP32 Light Sensor</div>
+          <div class="sensor-value" id="valLux">--</div>
+        </div>
+        <div class="sensor-item">
+          <div class="sensor-label">ESP32 Rain Sensor</div>
+          <div class="sensor-value" id="valRainSensor">--</div>
         </div>
       </div><br><br>
 

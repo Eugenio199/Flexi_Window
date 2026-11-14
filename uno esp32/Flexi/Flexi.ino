@@ -35,7 +35,7 @@ constexpr int DAYLIGHT_OPEN_THRESHOLD = 2400;
 constexpr int NIGHT_CLOSE_THRESHOLD = 1800;
 
 // ---------- MOTOR SETTINGS ----------
-constexpr uint32_t MOTOR_RUN_MS = 50;
+constexpr uint32_t MOTOR_RUN_MS = 90;
 
 // Enter the 2.4 GHz Wi-Fi credentials used by your phone/computer.
 const char* WIFI_SSID = "404_error!";
